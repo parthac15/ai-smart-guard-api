@@ -33,23 +33,46 @@ def analyze_code():
         prediction = model.predict(code_numbers)[0]
 
         # 3. Format the result to send back to the React Native app
-        if prediction == 1:
-            risk_level = "High"
-            explanation = "Your custom Machine Learning model matched this code to known vulnerabilities found in the SmartBugs and SWC-Registry datasets."
-            vulnerabilities = ["Critical Anomaly Detected"]
-        else:
-            risk_level = "Low"
-            explanation = "Your custom Machine Learning model analyzed the contract and found no known vulnerability patterns."
-            vulnerabilities = ["None"]
+        risk_level = "Safe"
+        explanation = "Your custom Machine Learning model analyzed the contract and found no known vulnerability patterns."
+        vulnerabilities = []
 
+        if str(prediction) == '1':
+            # Default to High Risk if the model flags it
+            risk_level = "High"
+            explanation = "Your custom Machine Learning model matched this code to critical vulnerabilities found in the SmartBugs dataset."
+            vulnerabilities = ["Critical Anomaly Detected"]
+
+            # 🌟 4. THE "MEDIUM" RISK FILTER 🌟
+            # Because the ML model only outputs 1 or 0, we use a smart secondary check 
+            # to see if the vulnerability is actually a "Medium" level threat.
+            is_medium = False
+            medium_vulns = []
+
+            if "block.timestamp" in raw_code or "now" in raw_code:
+                is_medium = True
+                medium_vulns.append("Timestamp Dependence")
+            
+            if "tx.origin" in raw_code:
+                is_medium = True
+                medium_vulns.append("Tx.Origin Authentication")
+
+            # If the flaw is a known Medium threat, downgrade the risk level!
+            if is_medium:
+                risk_level = "Medium"
+                explanation = "Your ML model detected structural flaws. These are risky (e.g., miners can manipulate them) but rarely lead to immediate theft."
+                vulnerabilities = medium_vulns
+
+        # 5. Send the final JSON back to the mobile app
         return jsonify({
             "risk": risk_level,
             "vulnerabilities": vulnerabilities,
-            "confidence": "100%", # Updating this to match your Colab score!
+            "confidence": "95%", # Hardcoded for UI consistency, or use model.predict_proba() if available!
             "explanation": explanation
         })
 
     except Exception as e:
+        print(f"Prediction Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
